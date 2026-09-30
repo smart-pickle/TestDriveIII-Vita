@@ -1,0 +1,28 @@
+# Original game and third-party tools (not redistributable / downloaded)
+/Game/
+/DOSBOX/
+/_tools/
+
+# Generated output
+/work/
+/port/decomp/
+/port/spec/tables/
+/_ghidra/
+
+# Build directories and generated binaries
+build*/
+*.vpk
+*.self
+*.velf
+eboot.bin
+*.exe
+*.dll
+*.o
+*.a
+/release/
+
+# Logs and Python cache
+__pycache__/
+*.log
+*.bak
+.DS_Store

@@ -1,0 +1,45 @@
+name: Build Vita VPK
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    container:
+      image: vitasdk/vitasdk:latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -B build-vita \
+            -DCMAKE_TOOLCHAIN_FILE=/usr/local/vitasdk/share/vita.toolchain.cmake \
+            -DBUNDLE_GAME_DATA=OFF
+
+      - name: Build VPK
+        run: |
+          cmake --build build-vita
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestDrive3Vita-vpk
+          path: build-vita/TestDrive3Vita.vpk
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: build-vita/TestDrive3Vita.vpk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
