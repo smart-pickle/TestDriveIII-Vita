@@ -28,7 +28,7 @@ This port brings Accolade's groundbreaking 1990 3D polygon racing sequel to the 
 
 > [!IMPORTANT]
 > **Proprietary game assets are NOT bundled in the release VPK.**
-> To comply with copyright laws, you must provide the original game data from your legally owned copy of the original DOS version of *Test Drive III: The Passion* (Version 3.0) by Accolade.
+> To comply with copyright laws, you must provide the original game data from your legally owned copy of the original DOS version of *Test Drive III: The Passion* (Version 3.0) by Accolade. **It will not work with Version 1.0 of the game it has to be 3.0**
 
 ### How to Install Game Files
 
@@ -45,7 +45,7 @@ This port brings Accolade's groundbreaking 1990 3D polygon racing sequel to the 
 
 | File | Type | Description |
 | :--- | :--- | :--- |
-| **`TDIII.EXE`** | **Required** | **Version 3.0** primary game executable (~125 KB packed / 166 KB unpacked) |
+| **`TDIII.EXE`** | **Required** | **Version 3.0 not 1.0** primary game executable (~125 KB packed / 166 KB unpacked) |
 | **`DATAA.DAT`** | **Required** | Menus, screens, title animations, and UI art |
 | **`DATAB.DAT`** | **Required** | High-resolution illustrations and splash art |
 | **`DATAC.DAT`** | **Required** | VGA color palettes and lookup tables |
