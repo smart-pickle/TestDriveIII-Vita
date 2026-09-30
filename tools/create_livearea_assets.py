@@ -1,164 +1,179 @@
 #!/usr/bin/env python3
 """
-Generate LiveArea visual assets for Test Drive III: The Passion on PS Vita.
-Creates:
-  vpk/icon0.png   (128x128)
-  vpk/bg.png      (840x500)
-  vpk/startup.png (280x158)
-  vpk/template.xml
+Generate official retail-style Sony PlayStation Vita LiveArea visual assets
+for Test Drive III: The Passion (1990).
+
+Produces:
+  vpk/bg.png       (840x500) - Full-bleed authentic 1990 Accolade cover art (clean, no text clutter)
+  vpk/startup.png  (280x158) - Polished start gate with official Test Drive III brush logo
+  vpk/icon0.png    (128x128) - Home Screen bubble icon with official logo & badge
 """
 
 import os
-from PIL import Image, ImageDraw, ImageFont
+import sys
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(SCRIPT_DIR)
+BOXART_PATH = os.path.join(SCRIPT_DIR, "boxart_front.jpg")
+OUTPUT_DIR = os.path.join(ROOT_DIR, "vpk")
 
 FONT_DIR = "/System/Library/Fonts/Supplemental"
 try:
-    FONT_TITLE_LG = ImageFont.truetype(f"{FONT_DIR}/Arial Bold.ttf", 36)
-    FONT_TITLE_MD = ImageFont.truetype(f"{FONT_DIR}/Arial Bold.ttf", 22)
-    FONT_TITLE_SM = ImageFont.truetype(f"{FONT_DIR}/Arial Bold.ttf", 15)
-    FONT_SUB_MD = ImageFont.truetype(f"{FONT_DIR}/Arial.ttf", 14)
-    FONT_SUB_SM = ImageFont.truetype(f"{FONT_DIR}/Arial.ttf", 10)
-    FONT_BADGE = ImageFont.truetype(f"{FONT_DIR}/Arial Bold.ttf", 11)
+    FONT_TITLE = ImageFont.truetype(f"{FONT_DIR}/Arial Bold.ttf", 20)
+    FONT_BADGE = ImageFont.truetype(f"{FONT_DIR}/Arial Bold.ttf", 9)
+    FONT_SUB = ImageFont.truetype(f"{FONT_DIR}/Arial Bold.ttf", 8)
+    FONT_SUB_GATE = ImageFont.truetype(f"{FONT_DIR}/Arial Bold.ttf", 11)
 except Exception:
     default = ImageFont.load_default()
-    FONT_TITLE_LG = default
-    FONT_TITLE_MD = default
-    FONT_TITLE_SM = default
-    FONT_SUB_MD = default
-    FONT_SUB_SM = default
+    FONT_TITLE = default
     FONT_BADGE = default
+    FONT_SUB = default
+    FONT_SUB_GATE = default
 
-def create_icon():
-    im = Image.new("RGB", (128, 128), (14, 18, 30))
+def load_and_prep_boxart():
+    if not os.path.exists(BOXART_PATH):
+        raise FileNotFoundError(f"Box art source not found at {BOXART_PATH}")
+
+    box = Image.open(BOXART_PATH).convert("RGB")
+
+    # Inpaint / clean the retail stickers on the bottom left:
+    # 1. Blue system requirements sticker: x: [0, 220], y: [1185, 1370]
+    # Sample clean door area from x: [230, 450], y: [1185, 1370]
+    door = box.crop((230, 1185, 450, 1370)).transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    box.paste(door, (0, 1185))
+
+    # 2. Round version sticker on jacket sleeve: x: [35, 125], y: [1085, 1175]
+    jacket = box.crop((140, 1085, 230, 1175)).transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    box.paste(jacket, (35, 1085))
+
+    # Soften seams
+    seam_door = box.crop((200, 1185, 240, 1370)).filter(ImageFilter.GaussianBlur(radius=2))
+    box.paste(seam_door, (200, 1185))
+    seam_arm = box.crop((25, 1080, 135, 1180)).filter(ImageFilter.GaussianBlur(radius=1.5))
+    box.paste(seam_arm, (25, 1080))
+
+    return box
+
+def extract_brush_logo(box):
+    # Test Drive III brush script is approximately y: [420, 560], x: [140, 950]
+    logo_crop = box.crop((140, 420, 950, 560))
+    logo_rgba = logo_crop.convert("RGBA")
+    data = logo_rgba.getdata()
+    clean_data = []
+    for item in data:
+        # Cream background threshold
+        if item[0] > 195 and item[1] > 175 and item[2] > 145:
+            clean_data.append((255, 255, 255, 0))
+        else:
+            clean_data.append((item[0], item[1], item[2], 255))
+    logo_rgba.putdata(clean_data)
+    return logo_rgba
+
+def create_bg(box):
+    crop_w = 1089
+    crop_h = int(crop_w / 1.68) # 648 px height to match 840x500 ratio (1.68)
+    crop_y2 = 1380
+    crop_y1 = crop_y2 - crop_h
+
+    bg_crop = box.crop((0, crop_y1, crop_w, crop_y2))
+    bg_resized = bg_crop.resize((840, 500), Image.Resampling.LANCZOS)
+
+    # Subtle top vignette for the PS Vita system status bar and Manual icon
+    vignette = Image.new("RGBA", (840, 500), (0, 0, 0, 0))
+    v_draw = ImageDraw.Draw(vignette)
+    for y in range(90):
+        alpha = int(110 * ((90 - y) / 90.0) ** 1.5)
+        v_draw.line([(0, y), (839, y)], fill=(12, 14, 22, alpha))
+
+    bg_final = Image.alpha_composite(bg_resized.convert("RGBA"), vignette).convert("RGB")
+    out_path = os.path.join(OUTPUT_DIR, "bg.png")
+    bg_final.save(out_path)
+    print(f"Created {out_path} (840x500)")
+
+def create_startup(brush_logo):
+    im = Image.new("RGB", (280, 158), (14, 18, 28))
     draw = ImageDraw.Draw(im)
 
-    # Gradient background
-    for y in range(128):
-        ratio = y / 128.0
-        r = int(12 + ratio * 24)
-        g = int(16 + ratio * 20)
-        b = int(30 + ratio * 45)
-        draw.line([(0, y), (127, y)], fill=(r, g, b))
-
-    # Outer border
-    draw.rounded_rectangle([2, 2, 125, 125], radius=14, outline=(255, 183, 3), width=2)
-    draw.rounded_rectangle([5, 5, 122, 122], radius=11, outline=(45, 60, 90), width=1)
-
-    # Racing stripes
-    draw.line([(10, 22), (117, 22)], fill=(255, 61, 87), width=2)
-    draw.line([(10, 26), (117, 26)], fill=(0, 212, 255), width=1)
-
-    # "TEST DRIVE"
-    draw.text((16, 32), "TEST", font=FONT_TITLE_SM, fill=(255, 255, 255))
-    draw.text((64, 32), "DRIVE", font=FONT_TITLE_SM, fill=(0, 212, 255))
-
-    # Big "III" roman numeral
-    draw.text((50, 52), "III", font=FONT_TITLE_MD, fill=(255, 215, 0))
-
-    # "THE PASSION" badge
-    draw.rounded_rectangle([14, 86, 114, 106], radius=4, fill=(200, 30, 45), outline=(255, 120, 130), width=1)
-    draw.text((20, 89), "THE PASSION", font=FONT_BADGE, fill=(255, 255, 255))
-
-    # Bottom subtext
-    draw.text((22, 110), "ACCOLADE 1990", font=FONT_SUB_SM, fill=(160, 180, 210))
-
-    os.makedirs("vpk", exist_ok=True)
-    im.save("vpk/icon0.png")
-    print("Created vpk/icon0.png (128x128)")
-
-def create_startup():
-    im = Image.new("RGB", (280, 158), (12, 16, 26))
-    draw = ImageDraw.Draw(im)
-
-    # Gradient background
+    # Subtle dark carbon gradient
     for y in range(158):
         ratio = y / 158.0
-        r = int(10 + ratio * 28)
-        g = int(14 + ratio * 24)
-        b = int(26 + ratio * 52)
+        r = int(12 + ratio * 16)
+        g = int(15 + ratio * 12)
+        b = int(24 + ratio * 20)
         draw.line([(0, y), (279, y)], fill=(r, g, b))
 
-    # 3D polygon wireframe / horizon feel
-    horizon = 95
-    draw.line([(0, horizon), (279, horizon)], fill=(50, 70, 110), width=1)
-    # Perspective road
-    draw.polygon([(140, horizon), (20, 157), (260, 157)], fill=(20, 26, 42))
-    draw.line([(140, horizon), (20, 157)], fill=(0, 212, 255), width=2)
-    draw.line([(140, horizon), (260, 157)], fill=(0, 212, 255), width=2)
-    draw.line([(140, horizon), (140, 157)], fill=(255, 215, 0), width=2)
-
-    # Frame border
+    # Outer gold & slate border
     draw.rectangle([0, 0, 279, 157], outline=(255, 183, 3), width=2)
+    draw.rectangle([3, 3, 276, 154], outline=(40, 50, 70), width=1)
 
-    # Title
-    draw.text((24, 16), "TEST DRIVE III", font=FONT_TITLE_MD, fill=(255, 255, 255))
-    draw.rounded_rectangle([24, 48, 140, 70], radius=4, fill=(200, 30, 45))
-    draw.text((32, 52), "THE PASSION", font=FONT_BADGE, fill=(255, 255, 255))
+    # Scale brush logo into upper half
+    target_w = 230
+    target_h = int(brush_logo.height * (target_w / brush_logo.width))
+    scaled_logo = brush_logo.resize((target_w, target_h), Image.Resampling.LANCZOS)
+    im.paste(scaled_logo, ((280 - target_w) // 2, 16), scaled_logo)
 
-    draw.text((148, 52), "VGA 3D POLYGON ENGINE", font=FONT_SUB_SM, fill=(200, 225, 255))
+    # Crisp golden subtitle (leaves the bottom y: 95..145 clear for blue Start button)
+    draw.text((80, 16 + target_h + 3), "T H E   P A S S I O N", font=FONT_SUB_GATE, fill=(255, 205, 110))
 
-    im.save("vpk/startup.png")
-    print("Created vpk/startup.png (280x158)")
+    out_path = os.path.join(OUTPUT_DIR, "startup.png")
+    im.save(out_path)
+    print(f"Created {out_path} (280x158)")
 
-def create_bg():
-    im = Image.new("RGB", (840, 500), (10, 14, 24))
+def create_icon(brush_logo):
+    im = Image.new("RGB", (128, 128), (14, 18, 28))
     draw = ImageDraw.Draw(im)
 
-    # Synthwave / 3D horizon gradient
-    for y in range(500):
-        ratio = y / 500.0
-        r = int(10 + ratio * 35)
-        g = int(14 + ratio * 28)
-        b = int(24 + ratio * 65)
-        draw.line([(0, y), (839, y)], fill=(r, g, b))
+    # Radial / subtle gradient
+    for y in range(128):
+        ratio = y / 128.0
+        r = int(14 + ratio * 28)
+        g = int(16 + ratio * 14)
+        b = int(28 + ratio * 14)
+        draw.line([(0, y), (127, y)], fill=(r, g, b))
 
-    # Perspective highway grid at bottom
-    horizon = 270
-    for y in range(horizon, 500, 20):
-        y_scaled = horizon + int((y - horizon) ** 1.3 * 0.7)
-        if y_scaled < 500:
-            draw.line([(0, y_scaled), (839, y_scaled)], fill=(35, 52, 85), width=1)
-    for x in range(0, 841, 60):
-        draw.line([(420 + (x - 420) // 5, horizon), (x, 499)], fill=(32, 46, 75), width=1)
+    # Rounded gold border
+    draw.rounded_rectangle([2, 2, 125, 125], radius=14, outline=(255, 183, 3), width=2)
+    draw.rounded_rectangle([5, 5, 122, 122], radius=11, outline=(50, 60, 80), width=1)
 
-    # Sun / Glow at horizon
-    draw.ellipse([340, horizon - 80, 500, horizon + 80], fill=(45, 65, 110))
+    # Racing stripes
+    draw.line([(12, 18), (115, 18)], fill=(220, 40, 60), width=2)
+    draw.line([(12, 22), (115, 22)], fill=(255, 183, 3), width=1)
 
-    # LiveArea Gate Title
-    draw.text((60, 48), "TEST DRIVE III: THE PASSION", font=FONT_TITLE_LG, fill=(255, 255, 255))
-    draw.rounded_rectangle([60, 102, 190, 129], radius=5, fill=(200, 30, 45), outline=(255, 120, 130), width=1)
-    draw.text((72, 107), "VGA 3D ENGINE", font=FONT_BADGE, fill=(255, 255, 255))
+    # Scaled brush logo
+    target_w = 110
+    target_h = int(brush_logo.height * (target_w / brush_logo.width))
+    scaled_logo = brush_logo.resize((target_w, target_h), Image.Resampling.LANCZOS)
+    im.paste(scaled_logo, ((128 - target_w) // 2, 36), scaled_logo)
 
-    draw.text((205, 107), "PlayStation®Vita Community Edition", font=FONT_SUB_MD, fill=(0, 212, 255))
-    draw.line([(60, 142), (780, 142)], fill=(45, 60, 90), width=1)
+    # Badge & subtext
+    draw.rounded_rectangle([18, 76, 110, 94], radius=3, fill=(190, 25, 45), outline=(255, 120, 140), width=1)
+    draw.text((23, 80), "THE PASSION", font=FONT_BADGE, fill=(255, 255, 255))
+    draw.text((24, 104), "ACCOLADE 1990", font=FONT_SUB, fill=(170, 185, 210))
 
-    # Info highlights
-    draw.text((60, 162), "• Free-Roaming 3D Filled-Polygon Driving World with Multiple Route Choices", font=FONT_SUB_MD, fill=(220, 230, 245))
-    draw.text((60, 192), "• 5 World-Class Supercars: CERV III, NSX, Diablo, Mythos & Stealth R/T", font=FONT_SUB_MD, fill=(220, 230, 245))
-    draw.text((60, 222), "• Authentic AdLib / Sound Blaster OPL2 FM Synthesis via Nuked-OPL3", font=FONT_SUB_MD, fill=(220, 230, 245))
-    draw.text((60, 252), "• Native Tri-Mode Display Engine (4:3 Pillarbox, 2x Integer, 16:9 Stretch)", font=FONT_SUB_MD, fill=(220, 230, 245))
-    draw.text((60, 282), "• Full Analog Steering, Shoulder Trigger Pedals & Manual Shifting", font=FONT_SUB_MD, fill=(220, 230, 245))
+    out_path = os.path.join(OUTPUT_DIR, "icon0.png")
+    im.save(out_path)
+    print(f"Created {out_path} (128x128)")
 
-    im.save("vpk/bg.png")
-    print("Created vpk/bg.png (840x500)")
+def main():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    box = load_and_prep_boxart()
+    brush = extract_brush_logo(box)
 
-def create_template():
-    content = """<?xml version="1.0" encoding="utf-8"?>
-<livearea style="a1" format-ver="01.00">
-  <livearea-background>
-    <image>bg.png</image>
-  </livearea-background>
-  <gate>
-    <startup-image>startup.png</startup-image>
-  </gate>
-</livearea>
-"""
-    with open("vpk/template.xml", "w", encoding="utf-8") as f:
-        f.write(content)
-    print("Created vpk/template.xml")
+    create_bg(box)
+    create_startup(brush)
+    create_icon(brush)
+
+    # Convert to 8-bit palette-indexed for strict Sony TRC compliance
+    converter = os.path.join(SCRIPT_DIR, "convert_to_8bit_png.py")
+    if os.path.exists(converter):
+        import subprocess
+        subprocess.check_call([
+            sys.executable, converter,
+            os.path.join(OUTPUT_DIR, "icon0.png"),
+            os.path.join(OUTPUT_DIR, "startup.png"),
+            os.path.join(OUTPUT_DIR, "bg.png")
+        ])
 
 if __name__ == "__main__":
-    create_icon()
-    create_startup()
-    create_bg()
-    create_template()
+    main()
